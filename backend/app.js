@@ -1,10 +1,13 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const bookRoutes = require('./routes/book');
 const userRoutes = require('./routes/user');
 
 const app = express();
+const cors = require('cors');
+const path = require('path');
+
+app.use(cors());
 
 
 mongoose.connect('mongodb+srv://A-Linxear:QHETnMg2FpqFUDEj@cluster0.bugxm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
@@ -23,7 +26,8 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-app.use('/api/book', bookRoutes);
+app.use('/api/books', bookRoutes);
 app.use('/api/auth', userRoutes);
+app.use('/images', express.static(path.join(__dirname, 'images')));
 
 module.exports = app;
