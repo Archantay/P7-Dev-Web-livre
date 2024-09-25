@@ -1,3 +1,4 @@
+require('dotenv').config({ path: 'process.env'});
 const express = require('express');
 const mongoose = require('mongoose');
 const bookRoutes = require('./routes/book');
@@ -10,11 +11,14 @@ const path = require('path');
 app.use(cors());
 
 
-mongoose.connect('mongodb+srv://A-Linxear:QHETnMg2FpqFUDEj@cluster0.bugxm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+
+const mongoUri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}/${process.env.DB_NAME}?retryWrites=true&w=majority`;
+mongoose.connect( mongoUri,
   { useNewUrlParser: true,
       useUnifiedTopology: true })
+      
   .then(() => console.log('Connexion à MongoDB réussie !'))
-  .catch(() => console.log('Connexion à MongoDB échouée !'
+  .catch(() => console.log('Connexion à MongoDB échouée !', 
 ));
 
 app.use((req, res, next) => {
