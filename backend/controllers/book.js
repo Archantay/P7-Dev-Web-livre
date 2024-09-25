@@ -1,6 +1,6 @@
-const book = require('../book');
-const Book = require('../book');
+const Book = require('../models/book');
 const fs = require('fs');
+const mongoose = require('mongoose');
 
 exports.createBook = (req, res, next) => {
     const bookObject = JSON.parse(req.body.book);
@@ -56,13 +56,26 @@ exports.deleteBook = (req, res, next) => {
   });
 };
 
+exports.getBestRatedBooks = (req, res, next) => {
+  Book.aggregate([
+      {
+          $addFields: {
+              averageRating: { $avg: "$ratings.grade" }
+          }
+      },
+      {
+          $sort: { averageRating: -1 } // Trie par moyenne décroissante
+      },
+      {
+          $limit: 3 // Limite aux 3 premiers livres
+      }
+  ])
+  .then(books => res.status(200).json(books))
+  .catch(error => res.status(400).json({ error }));
+};
+
 exports.getOneBook = (req, res, next) => {
     const bookId = req.params.id;
-    
-    if (!mongoose.Types.ObjectId.isValid(bookId)) {
-        return res.status(400).json({ error: 'Invalid book ID' });
-    }
-
     Book.findOne({ _id: bookId })
       .then(book => res.status(200).json(book))
       .catch(error => res.status(404).json({ error }));
@@ -75,31 +88,49 @@ exports.getAllBook = (req, res, next) => {
 };
 
 exports.rateBook = (req, res, next) => {
-    const userId = req.auth.userId;
-    const { grade } = req.body;
-  
-    if (grade < 0 || grade > 5) {
-      return res.status(400).json({ message: "La note doit être entre 0 et 5" });
-    }
-  
-    Book.findOne({ _id: req.params.id })
+  const userId = req.auth.userId;
+  const { rating } = req.body;
+ 
+  if (typeof rating !== 'number' || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: "La note doit être un nombre entre 1 et 5." });
+  }
+
+  const bookId = req.params.id;
+  if (!bookId || !mongoose.Types.ObjectId.isValid(bookId)) {
+      return res.status(400).json({ message: "ID de livre invalide." });
+  }
+
+  Book.findOne({ _id: bookId })
       .then(book => {
-        if (!book) {
-          return res.status(404).json({ message: 'Livre non trouvé' });
-        }
-        const existingRating = book.ratings.find(rating => rating.userId === userId);
-  
-        if (existingRating) {
-          return res.status(400).json({ message: "Vous avez déjà noté ce livre" });
-        }
-        book.ratings.push({ userId, grade });
-  
-        const totalRatings = book.ratings.reduce((sum, rating) => sum + rating.grade, 0);
-        book.averageRating = totalRatings / book.ratings.length;
-  
-        book.save()
-          .then(() => res.status(200).json({ message: 'Note ajoutée avec succès', averageRating: book.averageRating }))
-          .catch(error => res.status(400).json({ error }));
+          if (!book) {
+              return res.status(404).json({ message: 'Livre non trouvé.' });
+          }       
+          const existingRatingIndex = book.ratings.findIndex(rating => rating.userId.toString() === userId.toString());
+
+          if (existingRatingIndex !== -1) {
+              book.ratings[existingRatingIndex].grade = rating;
+          } else {
+              book.ratings.push({ userId, grade: rating });
+          }
+          const totalRatings = book.ratings.reduce((sum, rating) => sum + rating.grade, 0);
+          book.averageRating = totalRatings / book.ratings.length;
+
+          book.save()
+              .then(updatedBook => {
+                  res.status(200).json(
+                    updatedBook
+                  );
+              })
+              .catch(error => {
+                  console.error('Erreur lors de la sauvegarde du livre :', error);
+                  res.status(500).json({ error: "Erreur lors de la sauvegarde du livre." });
+              });
       })
-      .catch(error => res.status(500).json({ error }));
-  };
+      .catch(error => {
+          console.error('Erreur lors de la recherche du livre :', error);
+          res.status(500).json({ error: "Erreur serveur." });
+      });
+};
+
+
+
